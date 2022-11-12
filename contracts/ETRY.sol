@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 
 contract ETRY is ERC20, ERC20Burnable, Pausable, Ownable, ERC20Permit {
-    constructor() ERC20("E-TRY", "ETRY") ERC20Permit("E-TRY") {
+    constructor() ERC20("E-TRY", "eTRY") ERC20Permit("E-TRY") {
         _mint(msg.sender, 100000000000 * 10**decimals());
     }
 

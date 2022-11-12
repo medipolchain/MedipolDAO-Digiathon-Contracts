@@ -8,12 +8,15 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "./interfaces/IKYC.sol";
 
-contract MyToken is ERC1155, Ownable, ERC1155Supply {
+contract fdNFT is ERC1155, Ownable, ERC1155Supply {
     using ECDSA for bytes32;
+
     IKYC public kyc;
     uint256 public constant DENOMINATOR = 10000;
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
+
+    mapping(uint256 => bool) public nonceUsed;
 
     modifier onlyAllowed() {
         require(kyc.isAllowed(msg.sender), "Not allowed");
@@ -29,20 +32,68 @@ contract MyToken is ERC1155, Ownable, ERC1155Supply {
         _setURI(newuri);
     }
 
-    // mahalle parsel ada
+    function mint(
+        uint256 neighborhoodId, // mahalle
+        uint256 parcelId, // parsel
+        uint256 blockId, // ada
+        uint256 nonce,
+        bytes memory signature
+    ) external onlyAllowed {
+        require(
+            verify(
+                abi.encodePacked(
+                    msg.sender, // to get user based unique signatures
+                    neighborhoodId,
+                    parcelId,
+                    blockId,
+                    nonce
+                ),
+                signature,
+                owner()
+            ),
+            "Invalid signature"
+        );
+        nonceUsed[nonce] = true;
 
-    function mint(address account) external onlyAllowed {
         uint256 _id = _tokenIds.current();
         _tokenIds.increment();
 
-        _mint(account, _id, DENOMINATOR, "");
+        _mint(msg.sender, _id, DENOMINATOR, "");
     }
 
-    function mintBatch(address to, uint256 amount) external onlyOwner {
+    function mintBatch(
+        uint256[] calldata neighborhoodIds, // mahalle
+        uint256[] calldata parcelIds, // parsel
+        uint256[] calldata blockIds, // ada
+        uint256[] calldata nonces,
+        bytes[] memory signatures
+    ) external onlyOwner {
+        uint256 amount = neighborhoodIds.length;
+        require(amount == parcelIds.length, "parcelIds length must be equal");
+        require(amount == blockIds.length, "blockIds length must be equal");
+        require(amount == nonces.length, "nonces length must be equal");
+        require(amount == signatures.length, "signatures length must be equal");
+
         uint256[] memory ids = new uint256[](amount);
         uint256[] memory amounts = new uint256[](amount);
         uint256 _id;
         for (uint256 i; i < amount; ) {
+            require(
+                verify(
+                    abi.encodePacked(
+                        msg.sender,
+                        neighborhoodIds[i],
+                        parcelIds[i],
+                        blockIds[i],
+                        nonces[i]
+                    ),
+                    signatures[i],
+                    owner()
+                ),
+                "Invalid signature"
+            );
+            nonceUsed[nonces[i]] = true;
+
             _id = _tokenIds.current();
             _tokenIds.increment();
             ids[i] = _id;
@@ -51,7 +102,7 @@ contract MyToken is ERC1155, Ownable, ERC1155Supply {
                 i++;
             }
         }
-        _mintBatch(to, ids, amounts, "");
+        _mintBatch(msg.sender, ids, amounts, "");
     }
 
     function _beforeTokenTransfer(
