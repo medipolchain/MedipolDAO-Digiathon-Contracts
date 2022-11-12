@@ -4,10 +4,12 @@ pragma solidity 0.8.17;
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "./interfaces/IKYC.sol";
 
 contract MyToken is ERC1155, Ownable, ERC1155Supply {
+    using ECDSA for bytes32;
     IKYC public kyc;
     uint256 public constant DENOMINATOR = 10000;
     using Counters for Counters.Counter;
@@ -61,5 +63,16 @@ contract MyToken is ERC1155, Ownable, ERC1155Supply {
         bytes memory data
     ) internal override(ERC1155, ERC1155Supply) {
         super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
+    }
+
+    function verify(
+        bytes memory messageHash,
+        bytes memory signature,
+        address signer
+    ) public pure returns (bool) {
+        return
+            keccak256(messageHash).toEthSignedMessageHash().recover(
+                signature
+            ) == signer;
     }
 }
