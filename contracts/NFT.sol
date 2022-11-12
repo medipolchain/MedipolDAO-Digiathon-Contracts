@@ -4,11 +4,14 @@ pragma solidity 0.8.17;
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
 import "./interfaces/IKYC.sol";
 
 contract MyToken is ERC1155, Ownable, ERC1155Supply {
     IKYC public kyc;
     uint256 public constant DENOMINATOR = 10000;
+    using Counters for Counters.Counter;
+    Counters.Counter private _tokenIds;
 
     modifier onlyAllowed() {
         require(kyc.isAllowed(msg.sender), "Not allowed");
@@ -20,26 +23,34 @@ contract MyToken is ERC1155, Ownable, ERC1155Supply {
         kyc = IKYC(_kyc);
     }
 
-    function setURI(string memory newuri) public onlyOwner {
+    function setURI(string memory newuri) external onlyOwner {
         _setURI(newuri);
     }
 
     // mahalle parsel ada
 
-    function mint(address account, uint256 id) public onlyAllowed {
-        _mint(account, id, DENOMINATOR, "");
+    function mint(address account) external onlyAllowed {
+        uint256 _id = _tokenIds.current();
+        _tokenIds.increment();
+
+        _mint(account, _id, DENOMINATOR, "");
     }
 
-    function mintBatch(
-        address to,
-        uint256[] memory ids,
-        uint256[] memory amounts,
-        bytes memory data
-    ) public onlyOwner {
-        _mintBatch(to, ids, amounts, data);
+    function mintBatch(address to, uint256 amount) external onlyOwner {
+        uint256[] memory ids = new uint256[](amount);
+        uint256[] memory amounts = new uint256[](amount);
+        uint256 _id;
+        for (uint256 i; i < amount; ) {
+            _id = _tokenIds.current();
+            _tokenIds.increment();
+            ids[i] = _id;
+            amounts[i] = DENOMINATOR;
+            unchecked {
+                i++;
+            }
+        }
+        _mintBatch(to, ids, amounts, "");
     }
-
-    // The following functions are overrides required by Solidity.
 
     function _beforeTokenTransfer(
         address operator,
