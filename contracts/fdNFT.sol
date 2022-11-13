@@ -18,9 +18,18 @@ contract fdNFT is ERC1155, Ownable, ERC1155Supply {
     uint256 public constant DENOMINATOR = 10000;
 
     mapping(uint256 => bool) public nonceUsed;
+    mapping(uint256 => Property) public properties;
+
+    struct Property {
+        uint256 neighborhoodId;
+        uint256 parcelId;
+        uint256 blockId;
+        uint256 floorId;
+        uint256 apartmentId;
+    }
 
     modifier onlyAllowed() {
-        require(kyc.isAllowed(msg.sender), "Not allowed");
+        // require(kyc.isAllowed(msg.sender), "Not allowed");
         _;
     }
 
@@ -44,10 +53,19 @@ contract fdNFT is ERC1155, Ownable, ERC1155Supply {
         _setURI(newuri);
     }
 
+    function mockMint() external {
+        uint256 _id = _tokenIds.current();
+        _tokenIds.increment();
+        _mint(msg.sender, _id, DENOMINATOR, "");
+    }
+
     function mint(
         uint256 neighborhoodId, // mahalle
         uint256 parcelId, // parsel
         uint256 blockId, // ada
+        uint256 floorNo, // kat
+        uint256 apartmentNo, // daire
+        uint256 share,
         uint256 nonce,
         bytes memory signature
     ) external onlyAllowed {
@@ -58,6 +76,9 @@ contract fdNFT is ERC1155, Ownable, ERC1155Supply {
                     neighborhoodId,
                     parcelId,
                     blockId,
+                    floorNo,
+                    apartmentNo,
+                    share,
                     nonce
                 ),
                 signature,
@@ -65,32 +86,44 @@ contract fdNFT is ERC1155, Ownable, ERC1155Supply {
             ),
             "Invalid signature"
         );
-        require(nonceUsed[nonce] == false, "Nonce already used");
+        require(share <= DENOMINATOR, "Amount cannot be more than 100%");
+
+        require(!nonceUsed[nonce], "Nonce already used");
         nonceUsed[nonce] = true;
 
         uint256 _id = _tokenIds.current();
         _tokenIds.increment();
 
-        _mint(msg.sender, _id, DENOMINATOR, "");
+        _mint(msg.sender, _id, share, "");
+
+        properties[_id] = Property(
+            neighborhoodId,
+            parcelId,
+            blockId,
+            floorNo,
+            apartmentNo
+        );
     }
 
     function mintBatch(
-        uint256[] calldata neighborhoodIds, // mahalle
-        uint256[] calldata parcelIds, // parsel
-        uint256[] calldata blockIds, // ada
-        uint256[] calldata nonces,
+        uint256[] memory neighborhoodIds, // mahalle
+        uint256[] memory parcelIds, // parsel
+        uint256[] memory blockIds, // ada
+        uint256[] memory floorNo, // kat
+        uint256[] memory apartmentNo, // daire
+        uint256[] memory shares,
+        uint256[] memory nonces,
         bytes[] memory signatures
     ) external onlyAllowed {
-        uint256 amount = neighborhoodIds.length;
-        require(amount == parcelIds.length, "parcelIds length must be equal");
-        require(amount == blockIds.length, "blockIds length must be equal");
-        require(amount == nonces.length, "nonces length must be equal");
-        require(amount == signatures.length, "signatures length must be equal");
+        uint256 len = neighborhoodIds.length;
+        require(parcelIds.length == len, "parcelIds length must be equal");
+        require(blockIds.length == len, "blockIds length must be equal");
+        require(nonces.length == len, "nonces length must be equal");
+        require(signatures.length == len, "signatures length must be equal");
 
-        uint256[] memory ids = new uint256[](amount);
-        uint256[] memory amounts = new uint256[](amount);
+        uint256[] memory ids = new uint256[](len);
         uint256 _id;
-        for (uint256 i; i < amount; ) {
+        for (uint256 i; i < len; ) {
             require(
                 verify(
                     abi.encodePacked(
@@ -98,6 +131,9 @@ contract fdNFT is ERC1155, Ownable, ERC1155Supply {
                         neighborhoodIds[i],
                         parcelIds[i],
                         blockIds[i],
+                        floorNo[i],
+                        apartmentNo[i],
+                        shares[i],
                         nonces[i]
                     ),
                     signatures[i],
@@ -111,12 +147,19 @@ contract fdNFT is ERC1155, Ownable, ERC1155Supply {
             _id = _tokenIds.current();
             _tokenIds.increment();
             ids[i] = _id;
-            amounts[i] = DENOMINATOR;
+            properties[_id] = Property(
+                neighborhoodIds[i],
+                parcelIds[i],
+                blockIds[i],
+                floorNo[i],
+                apartmentNo[i]
+            );
+
             unchecked {
                 i++;
             }
         }
-        _mintBatch(msg.sender, ids, amounts, "");
+        _mintBatch(msg.sender, ids, shares, "");
     }
 
     function emergencyTransfer(
@@ -139,8 +182,18 @@ contract fdNFT is ERC1155, Ownable, ERC1155Supply {
         uint256[] memory ids,
         uint256[] memory amounts,
         bytes memory data
-    ) internal override(ERC1155, ERC1155Supply) onlyMarketplace {
+    ) internal override(ERC1155, ERC1155Supply) {
         super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
+    }
+
+    function _safeTransferFrom(
+        address from,
+        address to,
+        uint256 id,
+        uint256 amount,
+        bytes memory data
+    ) internal override onlyMarketplace {
+        super._safeTransferFrom(from, to, id, amount, data);
     }
 
     function verify(
